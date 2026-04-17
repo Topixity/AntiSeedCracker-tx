@@ -15,11 +15,13 @@ import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DragonRespawnSpikeModifier implements Listener {
 
     private final AntiSeedCracker plugin;
     private final AtomicBoolean taskScheduled = new AtomicBoolean(false);
+    private final AtomicReference<SchedulerUtil.TaskHandle> activeTask = new AtomicReference<>();
 
     private final EntityType crystalType;
 
@@ -54,14 +56,18 @@ public class DragonRespawnSpikeModifier implements Listener {
                 .set(plugin.getModifiedSpike(), PersistentDataType.BOOLEAN, false);
 
         Location anchor = new Location(world, 0.5, 65, 0.5);
-        SchedulerUtil.TaskHandle[] handleRef = new SchedulerUtil.TaskHandle[1];
-        handleRef[0] = SchedulerUtil.runAtLocationTimer(plugin, anchor, () -> {
+        SchedulerUtil.TaskHandle handle = SchedulerUtil.runAtLocationTimer(plugin, anchor, () -> {
+            // If unregister() already flipped the state, don't touch the world.
+            if (!taskScheduled.get()) {
+                cancelActive();
+                return;
+            }
             try {
                 DragonBattle dragonBattle = world.getEnderDragonBattle();
                 if (dragonBattle == null) {
                     // Fall-back, should not be reachable.
                     plugin.modifyEndSpikes(world);
-                    finish(handleRef);
+                    finish();
                     return;
                 }
 
@@ -73,19 +79,33 @@ public class DragonRespawnSpikeModifier implements Listener {
                 }
 
                 plugin.modifyEndSpikes(world);
-                finish(handleRef);
+                finish();
             } catch (Throwable t) {
                 plugin.getLogger().warning("Dragon respawn spike modifier tick failed: " + t);
-                finish(handleRef);
+                finish();
             }
         }, 300L, 20L);
+        SchedulerUtil.TaskHandle previous = activeTask.getAndSet(handle);
+        if (previous != null) {
+            // Shouldn't happen thanks to the CAS on taskScheduled, but be safe
+            // if a reload slipped in between and left a dangling handle.
+            try {
+                previous.cancel();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
-    private void finish(SchedulerUtil.TaskHandle[] handleRef) {
+    private void finish() {
         taskScheduled.set(false);
-        if (handleRef[0] != null) {
+        cancelActive();
+    }
+
+    private void cancelActive() {
+        SchedulerUtil.TaskHandle handle = activeTask.getAndSet(null);
+        if (handle != null) {
             try {
-                handleRef[0].cancel();
+                handle.cancel();
             } catch (Throwable ignored) {
             }
         }
@@ -109,5 +129,6 @@ public class DragonRespawnSpikeModifier implements Listener {
     public void unregister() {
         EntityPlaceEvent.getHandlerList().unregister(this);
         taskScheduled.set(false);
+        cancelActive();
     }
 }
