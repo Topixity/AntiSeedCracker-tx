@@ -8,13 +8,13 @@ import me.gadse.antiseedcracker.listeners.DragonRespawnSpikeModifier;
 import me.gadse.antiseedcracker.listeners.EndCityModifier;
 import me.gadse.antiseedcracker.packets.ServerLogin;
 import me.gadse.antiseedcracker.packets.ServerRespawn;
+import me.gadse.antiseedcracker.util.SchedulerUtil;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -24,12 +24,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
-public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor {
+public final class AntiSeedCracker extends JavaPlugin {
+
+    private static final Location END_SPIKE_ANCHOR = new Location(null, 0.5, 65, 0.5);
 
     private ProtocolManager protocolManager;
     private NamespacedKey modifiedSpike;
 
-    private DragonRespawnSpikeModifier dragonRespawnspikeModifier;
+    private DragonRespawnSpikeModifier dragonRespawnSpikeModifier;
     private EndCityModifier endCityModifier;
 
     @Override
@@ -41,23 +43,29 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
 
         protocolManager = ProtocolLibrary.getProtocolManager();
         modifiedSpike = new NamespacedKey(this, "modified-spike");
-        dragonRespawnspikeModifier = new DragonRespawnSpikeModifier(this);
+        dragonRespawnSpikeModifier = new DragonRespawnSpikeModifier(this);
         endCityModifier = new EndCityModifier(this);
 
         PluginCommand command = getCommand("antiseedcracker");
         if (command == null) {
             getLogger().severe("The antiseedcracker command is missing from plugin.yml.");
         } else {
-            command.setExecutor(new AntiSeedCrackerCommand(this));
+            AntiSeedCrackerCommand executor = new AntiSeedCrackerCommand(this);
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
         }
 
         reload(true);
+
+        getLogger().info("AntiSeedCracker v" + getDescription().getVersion()
+                + " enabled (Folia="
+                + SchedulerUtil.isFolia() + ").");
     }
 
     public void reload(boolean isOnEnable) {
         if (!isOnEnable) {
             protocolManager.removePacketListeners(this);
-            dragonRespawnspikeModifier.unregister();
+            dragonRespawnSpikeModifier.unregister();
             endCityModifier.unregister();
         }
 
@@ -70,19 +78,19 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
         }
 
         if (getConfig().getBoolean("modifiers.end_spikes.enabled", false)) {
-            getServer().getWorlds().forEach(world -> {
-                if (!getConfig().getStringList("modifiers.end_spikes.worlds").contains(world.getName())) {
-                    return;
+            List<String> allowedWorlds = getConfig().getStringList("modifiers.end_spikes.worlds");
+            for (World world : getServer().getWorlds()) {
+                if (!allowedWorlds.contains(world.getName())) {
+                    continue;
                 }
-
                 if (world.getEnvironment() != World.Environment.THE_END) {
-                    getLogger().warning("The world '%s' is not an end dimension, it will be ignored.");
-                    return;
+                    getLogger().warning("The world '" + world.getName()
+                            + "' is not an end dimension, it will be ignored.");
+                    continue;
                 }
-
-                modifyEndSpikes(world);
-            });
-            getServer().getPluginManager().registerEvents(dragonRespawnspikeModifier, this);
+                scheduleEndSpikeModification(world);
+            }
+            getServer().getPluginManager().registerEvents(dragonRespawnSpikeModifier, this);
         }
 
         if (getConfig().getBoolean("modifiers.end_cities.enabled", false)) {
@@ -92,13 +100,22 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
 
     @Override
     public void onDisable() {
-        protocolManager.removePacketListeners(this);
-        dragonRespawnspikeModifier.unregister();
-        endCityModifier.unregister();
+        if (protocolManager != null) {
+            protocolManager.removePacketListeners(this);
+        }
+        if (dragonRespawnSpikeModifier != null) {
+            dragonRespawnSpikeModifier.unregister();
+        }
+        if (endCityModifier != null) {
+            endCityModifier.unregister();
+        }
     }
 
     public long randomizeHashedSeed(long hashedSeed) {
-        int length = Long.toString(hashedSeed).length();
+        int length = Long.toString(Math.abs(hashedSeed)).length();
+        if (length < 2) {
+            length = 2;
+        }
         if (length > 18) {
             length = 18;
         }
@@ -108,16 +125,37 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
     }
 
     // https://minecraft.wiki/w/End_spike
-    private final List<Integer> spikeHeights = List.of(76, 79, 82, 85, 88, 91, 94, 97, 100, 103);
+    private static final List<Integer> SPIKE_HEIGHTS =
+            List.of(76, 79, 82, 85, 88, 91, 94, 97, 100, 103);
+
+    /**
+     * Dispatches the end spike modification onto the region thread that owns
+     * the portal column (0, 65, 0) of the given end world. Safe on both Paper
+     * and Folia — on Paper this runs on the next main-thread tick, on Folia it
+     * runs on the owning region thread for that chunk.
+     */
+    public void scheduleEndSpikeModification(World world) {
+        Location anchor = new Location(world, END_SPIKE_ANCHOR.getX(),
+                END_SPIKE_ANCHOR.getY(), END_SPIKE_ANCHOR.getZ());
+        SchedulerUtil.runAtLocation(this, anchor, () -> modifyEndSpikes(world));
+    }
 
     public void modifyEndSpikes(World world) {
         if (world.getEnvironment() != World.Environment.THE_END
-                || world.getPersistentDataContainer().getOrDefault(modifiedSpike, PersistentDataType.BOOLEAN, false)) {
+                || world.getPersistentDataContainer()
+                        .getOrDefault(modifiedSpike, PersistentDataType.BOOLEAN, false)) {
             return;
         }
 
         Map<Integer, Block> bedrockBlocksByHeight = getBedrockBlocksByHeight(world);
-        if (getConfig().getString("modify_end_spikes.mode", "swap").equalsIgnoreCase("swap")) {
+        if (bedrockBlocksByHeight.isEmpty()) {
+            getLogger().warning("No bedrock end spikes found in world '"
+                    + world.getName() + "', skipping modification.");
+            return;
+        }
+
+        String mode = getConfig().getString("modifiers.end_spikes.mode", "move");
+        if ("swap".equalsIgnoreCase(mode)) {
             swapEndSpikes(world, bedrockBlocksByHeight);
         } else {
             moveEndSpike(world, bedrockBlocksByHeight);
@@ -125,23 +163,38 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
     }
 
     private void swapEndSpikes(World world, Map<Integer, Block> bedrockBlocksByHeight) {
-        int randomSpikeIndex = ThreadLocalRandom.current().nextInt(spikeHeights.size());
-        int nextSpikeIndex = randomSpikeIndex + 1 > spikeHeights.size() - 1 ? 0 : randomSpikeIndex + 1;
-        Block spike_one = bedrockBlocksByHeight.get(spikeHeights.get(randomSpikeIndex));
-        Block spike_two = bedrockBlocksByHeight.get(spikeHeights.get(nextSpikeIndex));
+        List<Integer> availableHeights = SPIKE_HEIGHTS.stream()
+                .filter(bedrockBlocksByHeight::containsKey)
+                .toList();
+        if (availableHeights.size() < 2) {
+            getLogger().warning("Not enough end spikes to swap in world '"
+                    + world.getName() + "'.");
+            return;
+        }
 
-        spike_one.setType(Material.OBSIDIAN);
-        new Location(world, spike_one.getX(), spike_two.getY(), spike_one.getZ()).getBlock().setType(Material.BEDROCK);
+        int randomSpikeIndex = ThreadLocalRandom.current().nextInt(availableHeights.size());
+        int nextSpikeIndex = (randomSpikeIndex + 1) % availableHeights.size();
+        Block spikeOne = bedrockBlocksByHeight.get(availableHeights.get(randomSpikeIndex));
+        Block spikeTwo = bedrockBlocksByHeight.get(availableHeights.get(nextSpikeIndex));
 
-        spike_two.setType(Material.OBSIDIAN);
-        new Location(world, spike_two.getX(), spike_one.getY(), spike_two.getZ()).getBlock().setType(Material.BEDROCK);
+        spikeOne.setType(Material.OBSIDIAN);
+        world.getBlockAt(spikeOne.getX(), spikeTwo.getY(), spikeOne.getZ())
+                .setType(Material.BEDROCK);
+
+        spikeTwo.setType(Material.OBSIDIAN);
+        world.getBlockAt(spikeTwo.getX(), spikeOne.getY(), spikeTwo.getZ())
+                .setType(Material.BEDROCK);
 
         world.getPersistentDataContainer().set(modifiedSpike, PersistentDataType.BOOLEAN, true);
     }
 
     private void moveEndSpike(World world, Map<Integer, Block> bedrockBlocksByHeight) {
-        int randomSpikeIndex = ThreadLocalRandom.current().nextInt(spikeHeights.size());
-        Block endSpike = bedrockBlocksByHeight.get(spikeHeights.get(randomSpikeIndex));
+        List<Integer> availableHeights = bedrockBlocksByHeight.keySet().stream().toList();
+        if (availableHeights.isEmpty()) {
+            return;
+        }
+        int randomSpikeIndex = ThreadLocalRandom.current().nextInt(availableHeights.size());
+        Block endSpike = bedrockBlocksByHeight.get(availableHeights.get(randomSpikeIndex));
 
         endSpike.setType(Material.OBSIDIAN);
         endSpike.getRelative(BlockFace.DOWN).setType(Material.BEDROCK);
@@ -157,11 +210,17 @@ public final class AntiSeedCracker extends JavaPlugin implements CommandExecutor
             double x = 42.0 * Math.cos(2.0 * (-Math.PI + 0.3141592653589793 * i));
             double z = 42.0 * Math.sin(2.0 * (-Math.PI + 0.3141592653589793 * i));
 
-            Block block = world.getHighestBlockAt(new Location(world, x, 0, z));
-            while (block.getType() != Material.BEDROCK && block.getY() > 0) {
+            Block block = world.getHighestBlockAt((int) Math.floor(x), (int) Math.floor(z));
+            int guard = 0;
+            while (block.getType() != Material.BEDROCK && block.getY() > world.getMinHeight()) {
                 block = block.getRelative(BlockFace.DOWN);
+                if (++guard > 320) {
+                    break;
+                }
             }
-            bedrockBlocksByHeight.put(block.getY(), block);
+            if (block.getType() == Material.BEDROCK) {
+                bedrockBlocksByHeight.put(block.getY(), block);
+            }
         }
 
         return bedrockBlocksByHeight;

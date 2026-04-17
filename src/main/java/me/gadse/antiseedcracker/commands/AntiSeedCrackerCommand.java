@@ -13,6 +13,8 @@ import java.util.Set;
 
 public class AntiSeedCrackerCommand implements CommandExecutor, TabCompleter {
 
+    private static final Set<String> SUBCOMMANDS = Set.of("reload");
+
     private final AntiSeedCracker plugin;
 
     public AntiSeedCrackerCommand(AntiSeedCracker plugin) {
@@ -21,22 +23,35 @@ public class AntiSeedCrackerCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 0 || !args[0].equalsIgnoreCase("reload")) {
+        if (args.length == 0) {
+            sender.sendMessage("AntiSeedCracker v" + plugin.getDescription().getVersion());
+            sender.sendMessage("Usage: /" + label + " reload");
+            return true;
+        }
+        if (!args[0].equalsIgnoreCase("reload")) {
             return false;
         }
+        if (!sender.hasPermission("antiseedcracker.admin")) {
+            sender.sendMessage("You do not have permission to do that.");
+            return true;
+        }
 
-        plugin.reloadConfig();
-        plugin.reload(false);
-        sender.sendMessage("AntiSeedCracker config reloaded.");
+        try {
+            plugin.reloadConfig();
+            plugin.reload(false);
+            sender.sendMessage("AntiSeedCracker config reloaded.");
+        } catch (Throwable t) {
+            plugin.getLogger().severe("Reload failed: " + t);
+            sender.sendMessage("Reload failed: " + t.getMessage());
+        }
         return true;
     }
 
-    private final Set<String> args_zero = Set.of("reload");
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1 && sender.hasPermission("antiseedcracker.admin")) {
-            return StringUtil.copyPartialMatches(args[0], args_zero, new ArrayList<>());
+            return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
         }
-        return null;
+        return List.of();
     }
 }
