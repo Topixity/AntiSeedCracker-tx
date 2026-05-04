@@ -4,7 +4,7 @@ A Spigot plugin making an effort to work against seed cracking mods.
 
 ## Requirements
 - ProtocolLib 5.3+
-- Spigot (and forks) 1.20.4 - 1.21 - Make sure to update to the latest commit/version
+- Paper / Folia 26.1+ (Java 25) - Make sure to update to the latest commit/version
 
 *The plugin will - to a degree - check for old versions of ProtocolLib and warn you once on the first player join.*
 

@@ -1,7 +1,7 @@
 name: AntiSeedCracker
 version: '${version}'
 main: me.gadse.antiseedcracker.AntiSeedCracker
-api-version: '1.21'
+api-version: '26.1'
 folia-supported: true
 authors: [Gadse]
 description: Modifies the hashed seed sent to clients upon joining to make cracking the seed of your world harder
