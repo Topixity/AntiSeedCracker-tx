@@ -1,0 +1,22 @@
+# Slime anti-crack module messages
+# Uses '&' color codes. Placeholders: {cx} {cz} {bx} {bz} {count} {radius}
+
+prefix: "&8[&aSlimeAC&8] "
+
+usage-check: "&eUsage: /asc slime check [x z]"
+console-need-coords: "&cConsole must supply [x] [z]."
+invalid-coords: "&cInvalid chunk coords."
+
+check-slime: "&bChunk {cx},{cz} &8→ &aSLIME CHUNK"
+check-not-slime: "&bChunk {cx},{cz} &8→ &7not a slime chunk"
+
+find-header: "&bNearest {count} custom slime chunks:"
+find-entry: "&7  chunk {cx},{cz} &8(block {bx},{bz})"
+find-none: "&cNone within {radius} chunks."
+find-player-only: "&cOnly players can use /asc slime find."
+
+shuffle-warn: "&c&lWARNING: &cthis regenerates the slime salt and shifts ALL custom slime chunks. Existing slime farms WILL break. Run &e/asc slime shuffle-salt confirm &cto proceed."
+shuffle-done: "&aSlime salt regenerated. All slime chunks have been shuffled."
+shuffle-failed: "&cFailed to write new salt — check console."
+
+module-disabled: "&cThe slime module is disabled in slime.yml (enabled: false)."

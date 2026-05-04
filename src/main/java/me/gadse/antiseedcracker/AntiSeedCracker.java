@@ -8,6 +8,7 @@ import me.gadse.antiseedcracker.listeners.DragonRespawnSpikeModifier;
 import me.gadse.antiseedcracker.listeners.EndCityModifier;
 import me.gadse.antiseedcracker.packets.ServerLogin;
 import me.gadse.antiseedcracker.packets.ServerRespawn;
+import me.gadse.antiseedcracker.slime.SlimeAntiCrackModule;
 import me.gadse.antiseedcracker.util.SchedulerUtil;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -33,6 +34,7 @@ public final class AntiSeedCracker extends JavaPlugin {
 
     private DragonRespawnSpikeModifier dragonRespawnSpikeModifier;
     private EndCityModifier endCityModifier;
+    private SlimeAntiCrackModule slimeModule;
 
     @Override
     public void onEnable() {
@@ -45,6 +47,7 @@ public final class AntiSeedCracker extends JavaPlugin {
         modifiedSpike = new NamespacedKey(this, "modified-spike");
         dragonRespawnSpikeModifier = new DragonRespawnSpikeModifier(this);
         endCityModifier = new EndCityModifier(this);
+        slimeModule = new SlimeAntiCrackModule(this);
 
         PluginCommand command = getCommand("antiseedcracker");
         if (command == null) {
@@ -67,6 +70,7 @@ public final class AntiSeedCracker extends JavaPlugin {
             protocolManager.removePacketListeners(this);
             dragonRespawnSpikeModifier.unregister();
             endCityModifier.unregister();
+            slimeModule.disable();
         }
 
         if (getConfig().getBoolean("randomize_hashed_seed.login", true)) {
@@ -96,6 +100,12 @@ public final class AntiSeedCracker extends JavaPlugin {
         if (getConfig().getBoolean("modifiers.end_cities.enabled", false)) {
             getServer().getPluginManager().registerEvents(endCityModifier, this);
         }
+
+        slimeModule.enable();
+    }
+
+    public SlimeAntiCrackModule getSlimeModule() {
+        return slimeModule;
     }
 
     @Override
@@ -108,6 +118,9 @@ public final class AntiSeedCracker extends JavaPlugin {
         }
         if (endCityModifier != null) {
             endCityModifier.unregister();
+        }
+        if (slimeModule != null) {
+            slimeModule.disable();
         }
     }
 

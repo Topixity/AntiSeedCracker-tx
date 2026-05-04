@@ -10,8 +10,8 @@ depend: ["ProtocolLib"]
 commands:
   antiseedcracker:
     permission: "antiseedcracker.admin"
-    usage: /antiseedcracker [reload]
-    description: Version info and config reload command of AntiSeedCracker
+    usage: /antiseedcracker [reload | slime <reload|check|find|shuffle-salt>]
+    description: AntiSeedCracker control command (seed-randomiser, end modifiers, slime anti-crack module)
     aliases:
       - asc
 

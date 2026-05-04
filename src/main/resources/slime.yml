@@ -1,0 +1,53 @@
+# Slime anti-crack module config
+# Reload with /asc reload (config + messages, salt unchanged)
+# Re-shuffle slime chunks with /asc slime shuffle-salt confirm
+
+# Master switch — set to false to fully disable the slime module without
+# touching the rest of AntiSeedCracker.
+enabled: true
+
+spawn:
+  # Custom slime chunks: 1 in N chunks is eligible.
+  # 10 = 10% (vanilla-matched, recommended), 20 = 5%, 5 = 20%.
+  chunk-divisor: 10
+
+  # Scan radius around each online player, in chunks.
+  # Vanilla mob-spawn-range is 8 (128 blocks). Don't exceed simulation-distance.
+  radius-chunks: 8
+
+  # How often the per-player spawn loop runs, in ticks. 20 ticks = 1 second.
+  tick-period-ticks: 100
+
+  # Per-chunk chance on each tick to attempt a spawn (0.0 - 1.0).
+  # 0.08 roughly matches vanilla rate with 4-per-chunk cap.
+  per-chunk-tick-chance: 0.08
+
+  # Max live slimes allowed per chunk before plugin stops spawning there.
+  max-per-chunk: 4
+
+  # Y range for plugin-driven spawns. Vanilla slime chunks spawn up to Y=40.
+  min-y: -40
+  max-y: 40
+
+  # Max block light level for spawn (vanilla slime light threshold is 7).
+  max-light-level: 7
+
+  # Placement attempts per spawn dispatch before giving up.
+  placement-attempts: 5
+
+swamp:
+  # Allow vanilla swamp / mangrove swamp biome-based slime spawns.
+  enabled: true
+  swamp-y-min: 51
+  swamp-y-max: 69
+  mangrove-y-min: 50
+  mangrove-y-max: 70
+
+cleanup:
+  # On chunk load, remove pre-existing unnamed/untagged natural slimes from
+  # non-custom, non-swamp chunks. Prevents pre-plugin vanilla slime chunks
+  # from being detected via lingering entity positions.
+  enabled: true
+
+# /asc slime find search radius, in chunks.
+find-radius-chunks: 16
