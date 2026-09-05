@@ -12,6 +12,10 @@ repositories {
         url = 'https://repo.papermc.io/repository/maven-public/'
     }
     maven {
+        name = 'canvasmc'
+        url = 'https://maven.canvasmc.io/releases'
+    }
+    maven {
         name = 'dmulloy2-repo'
         url = 'https://repo.dmulloy2.net/repository/public/'
     }
@@ -23,11 +27,11 @@ dependencies {
     // with paper-api while still letting the plugin run on plain Paper — the
     // Folia-only classes are referenced via reflection / runtime detection in
     // SchedulerUtil.
-    compileOnly 'dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT'
+    compileOnly 'io.canvasmc.canvas:canvas-api:26.2.build.938-stable'
     compileOnly 'com.comphenix.protocol:ProtocolLib:5.4.0-SNAPSHOT'
 }
 
-def targetJavaVersion = 21
+def targetJavaVersion = 25
 java {
     def javaVersion = JavaVersion.toVersion(targetJavaVersion)
     sourceCompatibility = javaVersion
