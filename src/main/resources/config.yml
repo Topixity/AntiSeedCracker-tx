@@ -1,5 +1,10 @@
 # Settings for when the server-sent hashed seed is randomized.
 randomize_hashed_seed:
+  # "random": a new random value in every packet (default).
+  # "stable": one fixed random value (stored in hashed-seed.dat, unrelated to the real seed) for everyone.
+  # Use "stable" if clients key per-world data on the hashed seed, e.g. Distant Horizons LOD folders.
+  # Delete hashed-seed.dat to get a new value. Changing mode needs /antiseedcracker reload.
+  mode: random
   # Whether the seed should be randomized in the login packet.
   # The login packet is sent before the player sees the world, to send server and join world information.
   # This is NOT the handshake login packet, so at this point the player already joined the server.

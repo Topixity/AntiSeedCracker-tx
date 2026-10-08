@@ -20,6 +20,12 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +41,10 @@ public final class AntiSeedCracker extends JavaPlugin {
     private DragonRespawnSpikeModifier dragonRespawnSpikeModifier;
     private EndCityModifier endCityModifier;
     private SlimeAntiCrackModule slimeModule;
+
+    private static final String STABLE_SEED_FILE = "hashed-seed.dat";
+    private volatile boolean stableHashedSeed;
+    private volatile long stableHashedSeedValue;
 
     @Override
     public void onEnable() {
@@ -72,6 +82,8 @@ public final class AntiSeedCracker extends JavaPlugin {
             endCityModifier.unregister();
             slimeModule.disable();
         }
+
+        loadHashedSeedMode();
 
         if (getConfig().getBoolean("randomize_hashed_seed.login", true)) {
             protocolManager.addPacketListener(new ServerLogin(this));
@@ -124,7 +136,43 @@ public final class AntiSeedCracker extends JavaPlugin {
         }
     }
 
+    /**
+     * "stable" mode: every client gets the same fake hashed seed, unrelated to the real seed, so clients that key
+     * per-world data on it (Distant Horizons) see a constant world. Generated once from SecureRandom and persisted.
+     */
+    private void loadHashedSeedMode() {
+        String mode = getConfig().getString("randomize_hashed_seed.mode", "random");
+        stableHashedSeed = "stable".equalsIgnoreCase(mode);
+        if (!stableHashedSeed) {
+            if (!"random".equalsIgnoreCase(mode)) {
+                getLogger().warning("Unknown randomize_hashed_seed.mode '" + mode + "', using 'random'.");
+            }
+            return;
+        }
+        File f = new File(getDataFolder(), STABLE_SEED_FILE);
+        if (f.isFile()) {
+            try (DataInputStream in = new DataInputStream(Files.newInputStream(f.toPath()))) {
+                stableHashedSeedValue = in.readLong();
+                return;
+            } catch (IOException e) {
+                getLogger().warning("Failed to read " + STABLE_SEED_FILE + ", regenerating: " + e.getMessage());
+            }
+        }
+        // 18 digits, same shape as the randomized values
+        long min = 100_000_000_000_000_000L;
+        long max = 999_999_999_999_999_999L;
+        stableHashedSeedValue = new SecureRandom().nextLong(min, max + 1);
+        try (DataOutputStream out = new DataOutputStream(Files.newOutputStream(f.toPath()))) {
+            out.writeLong(stableHashedSeedValue);
+        } catch (IOException e) {
+            getLogger().severe("Failed to write " + STABLE_SEED_FILE + ": " + e.getMessage());
+        }
+    }
+
     public long randomizeHashedSeed(long hashedSeed) {
+        if (stableHashedSeed) {
+            return stableHashedSeedValue;
+        }
         int length = Long.toString(Math.abs(hashedSeed)).length();
         if (length < 2) {
             length = 2;
